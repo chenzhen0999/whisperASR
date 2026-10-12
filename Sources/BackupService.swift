@@ -43,6 +43,7 @@ enum BackupService {
         var selectedMinutesPromptID: String?
         var minutesContextTokens: Int?
         var diarizationUseRemote: Bool?
+        var diarizationUseOffline: Bool?
     }
 
     // MARK: - Export
@@ -66,7 +67,9 @@ enum BackupService {
             minutesContextTokens: d.object(forKey: MinutesPromptStore.contextTokensKey) == nil
                 ? nil : d.integer(forKey: MinutesPromptStore.contextTokensKey),
             diarizationUseRemote: d.object(forKey: DiarizationService.useRemoteKey) == nil
-                ? nil : d.bool(forKey: DiarizationService.useRemoteKey)
+                ? nil : d.bool(forKey: DiarizationService.useRemoteKey),
+            diarizationUseOffline: d.object(forKey: DiarizationService.useOfflineKey) == nil
+                ? nil : d.bool(forKey: DiarizationService.useOfflineKey)
         )
 
         return BackupFile(
@@ -118,6 +121,7 @@ enum BackupService {
         set(c.selectedMinutesPromptID, MinutesPromptStore.selectedKey)
         if let tokens = c.minutesContextTokens { d.set(tokens, forKey: MinutesPromptStore.contextTokensKey) }
         if let remote = c.diarizationUseRemote { d.set(remote, forKey: DiarizationService.useRemoteKey) }
+        if let offline = c.diarizationUseOffline { d.set(offline, forKey: DiarizationService.useOfflineKey) }
         MinutesPromptStore.shared.reloadFromDefaults()
 
         // ModelManager caches the selection in a stored property; nudge it so the

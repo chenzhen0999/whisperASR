@@ -149,10 +149,21 @@ xattr -cr /path/to/WhisperASR.app
 
 Open **Settings** (Cmd+,) to configure:
 
+- **Speakers → Use better diarization model** — with the on-device engine selected, enable full-recording offline VBx diarization. Enabling downloads and prepares the additional models immediately, with progress and retryable errors. Recordings stay on your Mac. Disable it to return to the standard local pipeline; downloaded models remain cached for reuse.
 - **Target Language** — choose a language to translate transcriptions into
-- **OpenAI Translation API** — only the API key is required; endpoint defaults to OpenAI, model defaults to `gpt-4o-mini`. Any OpenAI-compatible endpoint (including local models) works.
+- **OpenAI Translation API** — only the API key is required; endpoint defaults to OpenAI, model defaults to `gpt-5.4`. Any OpenAI-compatible endpoint (including local models) works. Translation and meeting minutes use the selected model's default sampling settings, including reasoning models that reject explicit temperature values.
 - **Speech Recognition Models** — download, select, or delete models; the selected model is used for all transcription
 - **Custom Model** — optional path to your own `ggml-*.bin` file, used when no downloaded model is selected
+
+### Diarization checks
+
+Run `swift test` to verify engine selection. To also download/load the offline models and verify local inference and known-voice matching, provide a speech file:
+
+```bash
+VBX_TEST_AUDIO=/path/to/single-speaker-speech.wav swift test --filter DiarizationTests
+```
+
+The integration check creates a temporary reference clip and leaves the downloaded models cached in `~/Library/Application Support/WhisperASR/Models/Diarization-VBx/`.
 
 ## Project Structure
 

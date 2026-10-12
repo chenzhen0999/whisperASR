@@ -10,6 +10,8 @@ struct SettingsView: View {
     @AppStorage("translationModel") private var translationModel = ""
 
     @AppStorage(DiarizationService.useRemoteKey) private var diarizationUseRemote = false
+    @AppStorage(DiarizationService.useOfflineKey) private var diarizationUseOffline = false
+    @State private var offlineDiarizationModels = OfflineDiarizationModels.shared
     /// The voice library has no observable store, so the list is snapshotted when
     /// Settings opens and kept in step as the user deletes from it.
     @State private var knownSpeakers: [SpeakerProfile] = []
@@ -74,15 +76,18 @@ struct SettingsView: View {
                           prompt: Text("https://api.openai.com/v1"))
                     .textFieldStyle(.roundedBorder)
                     .onChange(of: translationEndpoint) { _, _ in verifyResult = nil }
+                Text("For OpenAI-compatible servers, a trailing /v1 may be necessary (e.g. http://localhost:11434/v1).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 SecureField("API Key", text: $translationAPIKey,
                             prompt: Text("sk-..."))
                     .textFieldStyle(.roundedBorder)
                     .onChange(of: translationAPIKey) { _, _ in verifyResult = nil }
                 TextField("Model", text: $translationModel,
-                          prompt: Text("gpt-4o-mini"))
+                          prompt: Text("gpt-5.4"))
                     .textFieldStyle(.roundedBorder)
                     .onChange(of: translationModel) { _, _ in verifyResult = nil }
-                Text("Used for translation and meeting minutes. Only API Key is required. Endpoint defaults to OpenAI, model defaults to gpt-4o-mini.")
+                Text("Used for translation and meeting minutes. Only API Key is required. Endpoint defaults to OpenAI, model defaults to gpt-5.4.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -173,10 +178,33 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 Text(diarizationUseRemote
-                     ? "Uploads the recording to OpenAI's gpt-4o-transcribe-diarize (25 MB limit, at most 4 known voices per run) using the API key above. More accurate on crowded conversations."
+                     ? "Uploads the recording to OpenAI's gpt-4o-transcribe-diarize (25 MB limit, at most 4 known voices per run) using the API key above. Selected voice samples are uploaded too."
                      : "Identifies speakers entirely on this Mac using the Neural Engine. No key, no upload; the models download on first use.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                if !diarizationUseRemote {
+                    Toggle("Use better diarization model", isOn: $diarizationUseOffline)
+                        .disabled(offlineDiarizationModels.isDownloading)
+                        .onChange(of: diarizationUseOffline) { _, enabled in
+                            if enabled { prepareOfflineDiarization() }
+                        }
+                    Text("Analyzes the full recording for better speaker separation. Downloads additional models when enabled; audio stays on this Mac. Turning this off keeps the downloaded models.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if offlineDiarizationModels.isDownloading {
+                        ProgressView("Downloading and preparing diarization models…",
+                                     value: offlineDiarizationModels.progress)
+                    } else if let error = offlineDiarizationModels.error {
+                        Text("Couldn't prepare the models: \(error). Enable the option to retry.")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    } else if offlineDiarizationModels.isReady {
+                        Label("Better diarization model downloaded", systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
 
                 if knownSpeakers.isEmpty {
                     Text("No known voices yet. Name the speakers on a transcript and the app keeps a short clip of each one to recognize them next time.")
@@ -347,6 +375,22 @@ struct SettingsView: View {
         }
         .onAppear {
             knownSpeakers = SpeakerLibrary.speakers
+            if diarizationUseOffline && !diarizationUseRemote {
+                prepareOfflineDiarization()
+            }
+        }
+        .onChange(of: diarizationUseRemote) { _, remote in
+            if !remote && diarizationUseOffline { prepareOfflineDiarization() }
+        }
+    }
+
+    private func prepareOfflineDiarization() {
+        Task { @MainActor in
+            do {
+                _ = try await offlineDiarizationModels.prepare()
+            } catch {
+                diarizationUseOffline = false
+            }
         }
     }
 

@@ -277,13 +277,13 @@ enum MeetingMinutesService {
         // Minutes responses are long-form; allow far more time than translation.
         request.timeoutInterval = 300
 
+        // Use model defaults so reasoning models that reject temperature work.
         let body: [String: Any] = [
-            "model": model.isEmpty ? "gpt-4o-mini" : model,
+            "model": model.isEmpty ? "gpt-5.4" : model,
             "messages": [
                 ["role": "system", "content": system],
                 ["role": "user", "content": user]
-            ],
-            "temperature": 0.3
+            ]
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 

@@ -34,6 +34,11 @@ let package = Package(
                 .linkedFramework("ScreenCaptureKit"),
                 .linkedFramework("WebKit"),
             ]
+        ),
+        .testTarget(
+            name: "WhisperASRTests",
+            dependencies: ["WhisperASR"],
+            path: "Tests/WhisperASRTests"
         )
     ]
 )

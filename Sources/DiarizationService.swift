@@ -8,15 +8,19 @@ enum DiarizationService {
 
     /// Settings key, exposed so `SettingsView` and the service agree on it.
     static let useRemoteKey = "diarizationUseRemote"
+    static let useOfflineKey = "diarizationUseOfflineVBx"
 
     /// The engine the user selected. On-device is the default: it needs no key,
     /// no upload, and keeps the app usable entirely offline.
-    static func provider() -> DiarizationProvider {
-        guard UserDefaults.standard.bool(forKey: useRemoteKey) else {
+    static func provider(defaults: UserDefaults = .standard) -> DiarizationProvider {
+        guard defaults.bool(forKey: useRemoteKey) else {
+            if defaults.bool(forKey: useOfflineKey) {
+                return OfflineDiarizationProvider()
+            }
             return LocalDiarizationProvider()
         }
         return OpenAIDiarizationProvider(
-            apiKey: UserDefaults.standard.string(forKey: "translationAPIKey") ?? "")
+            apiKey: defaults.string(forKey: "translationAPIKey") ?? "")
     }
 
     // MARK: - Reconciliation with segments

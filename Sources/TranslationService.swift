@@ -88,7 +88,7 @@ enum TranslationService {
 
         let apiKey = UserDefaults.standard.string(forKey: "translationAPIKey") ?? ""
         let model = (UserDefaults.standard.string(forKey: "translationModel") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let effectiveModel = model.isEmpty ? "gpt-4o-mini" : model
+        let effectiveModel = model.isEmpty ? "gpt-5.4" : model
 
         guard let url = apiURL(appending: "chat/completions") else {
             throw TranslationError.invalidEndpoint
@@ -115,13 +115,14 @@ enum TranslationService {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 30
 
+        // Reasoning models can reject explicit temperature values; use the
+        // selected model's default sampling settings.
         let body: [String: Any] = [
             "model": effectiveModel,
             "messages": [
                 ["role": "system", "content": "You are a translator for a live transcription. Translate each numbered line to \(languageName). If a line is already in \(languageName), output it unchanged. Output ONLY the translations in the same numbered format (e.g. \"1. ...\"). Keep exactly \(segmentTexts.count) lines.\(contextSection)"],
                 ["role": "user", "content": numberedInput]
-            ],
-            "temperature": 0.3
+            ]
         ]
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
