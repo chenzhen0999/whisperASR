@@ -136,7 +136,8 @@ struct LocalDiarizationProvider: DiarizationProvider {
 
     /// Maps clusters to library speakers. A cluster the diarizer tracked under an
     /// enrolled id is a direct hit; the remaining clusters and the remaining
-    /// (unclaimed) known voices go through one one-to-one cosine assignment.
+    /// known voices are compared by cosine similarity, allowing disjoint fragments
+    /// of a person to share their name.
     private func resolveIdentities(in result: DiarizationResult,
                                    manager: DiarizerManager,
                                    enrollment: Enrollment) -> [String: ClusterIdentity] {
@@ -161,12 +162,15 @@ struct LocalDiarizationProvider: DiarizationProvider {
             }
         }
 
-        // Voices already claimed by a direct hit are out of the running — the
-        // enrolled cluster IS that person, so another cluster can't be too.
-        let claimed = Set(identities.values.map(\.speakerID))
-        let available = enrollment.references.filter { !claimed.contains($0.speakerID) }
-        for (clusterID, speakerID) in SpeakerEmbeddingMatcher.assign(clusters: unmatched,
-                                                                     references: available) {
+        // Allow disjoint fragments to reuse a known identity, while preventing
+        // simultaneous voices from collapsing into one person.
+        let turns = result.segments.map {
+            SpeakerTurn(start: Double($0.startTimeSeconds), end: Double($0.endTimeSeconds),
+                        label: $0.speakerId, speakerID: nil)
+        }
+        for (clusterID, speakerID) in SpeakerEmbeddingMatcher.assign(
+            clusters: unmatched, references: enrollment.references, turns: turns,
+            existing: identities.mapValues(\.speakerID)) {
             guard let name = enrollment.namesByID[speakerID] else { continue }
             identities[clusterID] = ClusterIdentity(speakerID: speakerID, name: name)
         }

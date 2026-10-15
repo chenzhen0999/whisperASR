@@ -25,31 +25,35 @@ enum SpeakerEmbeddingMatcher {
         let embedding: [Float]
     }
 
-    /// Resolves clusters to known speakers one-to-one: each cluster gets at most
-    /// one speaker and each speaker at most one cluster (two clusters must be two
-    /// different people — letting both take the same name would merge them).
-    /// Pairs are granted greedily by descending similarity, so when two clusters
-    /// both resemble one voice, the closer cluster wins and the other stays
-    /// anonymous. Returns cluster id → matched speaker.
+    /// A person may occupy several fragmented clusters. Accept only an unambiguous
+    /// voice match, and never merge clusters that speak at the same time.
     static func assign(clusters: [(id: String, embedding: [Float])],
-                       references: [Reference]) -> [String: UUID] {
-        var scored: [(clusterID: String, speakerID: UUID, similarity: Float)] = []
+                       references: [Reference], turns: [SpeakerTurn] = [],
+                       existing: [String: UUID] = [:]) -> [String: UUID] {
+        var candidates: [(cluster: String, speaker: UUID, score: Float)] = []
         for cluster in clusters {
+            var scores: [UUID: Float] = [:]
             for reference in references {
-                let similarity = cosineSimilarity(cluster.embedding, reference.embedding)
-                guard similarity >= minSimilarity else { continue }
-                scored.append((cluster.id, reference.speakerID, similarity))
+                let score = cosineSimilarity(cluster.embedding, reference.embedding)
+                if score.isFinite {
+                    scores[reference.speakerID] = max(scores[reference.speakerID] ?? -1, score)
+                }
             }
+            let ranked = scores.sorted { $0.value > $1.value }
+            guard let best = ranked.first, best.value >= minSimilarity,
+                  ranked.count == 1 || best.value - ranked[1].value >= 0.08 else { continue }
+            candidates.append((cluster.id, best.key, best.value))
         }
-
-        var assigned: [String: UUID] = [:]
-        var takenSpeakers: Set<UUID> = []
-        for match in scored.sorted(by: { $0.similarity > $1.similarity }) {
-            guard assigned[match.clusterID] == nil, !takenSpeakers.contains(match.speakerID) else {
-                continue
+        var assigned = existing
+        for candidate in candidates.sorted(by: { $0.score > $1.score }) {
+            let conflicts = assigned.contains { cluster, speaker in
+                guard speaker == candidate.speaker, cluster != candidate.cluster else { return false }
+                let other = turns.filter { $0.label == cluster }
+                return turns.filter { $0.label == candidate.cluster }.contains { turn in
+                    other.contains { min(turn.end, $0.end) - max(turn.start, $0.start) > 0.1 }
+                }
             }
-            assigned[match.clusterID] = match.speakerID
-            takenSpeakers.insert(match.speakerID)
+            if !conflicts { assigned[candidate.cluster] = candidate.speaker }
         }
         return assigned
     }

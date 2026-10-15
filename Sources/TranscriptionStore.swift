@@ -9,6 +9,7 @@ enum TranscriptionStore {
         let fileName: String
         let filePath: String
         let segments: [TranscriptionSegment]
+        let diarizationSourceSegments: [TranscriptionSegment]?
         let fullText: String
         let dateAdded: Date
         let statusTag: String          // "completed", "failed", "pending"
@@ -84,6 +85,7 @@ enum TranscriptionStore {
             fileName: item.fileName,
             filePath: item.fileURL.path,
             segments: item.segments,
+            diarizationSourceSegments: item.diarizationSourceSegments,
             fullText: item.fullText,
             dateAdded: item.dateAdded,
             statusTag: statusTag,
@@ -121,7 +123,7 @@ enum TranscriptionStore {
                 default:          status = .pending
                 }
 
-                return TranscriptionItem(
+                let item = TranscriptionItem(
                     id: stored.id,
                     fileName: stored.fileName,
                     fileURL: resolveRecordingURL(storedPath: stored.filePath),
@@ -132,6 +134,8 @@ enum TranscriptionStore {
                     translatedSegments: stored.translatedSegments ?? [],
                     translationLanguage: stored.translationLanguage
                 )
+                item.diarizationSourceSegments = stored.diarizationSourceSegments
+                return item
             }
             .sorted { $0.dateAdded > $1.dateAdded }
     }

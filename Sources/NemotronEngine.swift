@@ -115,6 +115,7 @@ actor NemotronEngine {
     static func makeSegments(from timings: [TokenTiming]) -> [TranscriptionSegment] {
         var segments: [TranscriptionSegment] = []
         var pieceTexts: [String] = []
+        var tokens: [WordTiming.Token] = []
         var segmentStart: TimeInterval = 0
         var segmentEnd: TimeInterval = 0
 
@@ -123,9 +124,11 @@ actor NemotronEngine {
                 .replacingOccurrences(of: "\u{2581}", with: " ")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !text.isEmpty {
-                segments.append(TranscriptionSegment(start: segmentStart, end: segmentEnd, text: text))
+                segments.append(TranscriptionSegment(start: segmentStart, end: segmentEnd, text: text,
+                    words: WordTiming.words(tokens: tokens, text: text, trimmingWhitespace: true)))
             }
             pieceTexts.removeAll()
+            tokens.removeAll()
         }
 
         for (index, timing) in timings.enumerated() {
@@ -133,6 +136,8 @@ actor NemotronEngine {
                 segmentStart = timing.startTime
             }
             pieceTexts.append(timing.token)
+            tokens.append(.init(bytes: Array(timing.token.replacingOccurrences(of: "\u{2581}", with: " ").utf8),
+                                start: timing.startTime, end: timing.endTime))
             segmentEnd = max(segmentEnd, timing.endTime)
 
             let endsSentence = timing.token.trimmingCharacters(in: .whitespaces).last

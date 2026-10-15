@@ -101,6 +101,7 @@ struct DetailView: View {
                                     Label("Translate", systemImage: "character.bubble")
                                 }
                                 .menuIndicator(.hidden)
+                                .disabled(item.isDiarizing)
                             }
 
                             if !item.translatedSegments.isEmpty {

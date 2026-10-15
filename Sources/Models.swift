@@ -42,10 +42,25 @@ enum TranscriptFontSize: String, CaseIterable {
 
 // MARK: - Transcription Segment
 
+struct TranscriptionWord: Codable, Equatable, Sendable {
+    let start: Double
+    let end: Double
+    /// Includes adjacent whitespace and punctuation, so joining words is lossless.
+    let text: String
+}
+
+struct SpeakerSampleRange: Codable, Equatable {
+    let start: Double
+    let end: Double
+}
+
 struct TranscriptionSegment: Codable, Equatable {
     let start: Double
     let end: Double?
     let text: String
+    var words: [TranscriptionWord]?
+    /// Intervals confirmed by diarization to contain only this speaker.
+    var speakerSampleRanges: [SpeakerSampleRange]?
 
     // Speaker diarization. All optional, so transcripts saved before the feature
     // existed still decode, and a transcript that was never diarized stays as it
@@ -109,6 +124,8 @@ class TranscriptionItem: Identifiable {
     var fileURL: URL
     var status: TranscriptionStatus = .pending
     var segments: [TranscriptionSegment] = []
+    /// Original ASR boundaries, retained so a different engine can re-split them.
+    var diarizationSourceSegments: [TranscriptionSegment]?
     var fullText: String = ""
     var progress: Double = 0
     var transcriptionStartTime: Date?

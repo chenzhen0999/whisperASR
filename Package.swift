@@ -9,7 +9,7 @@ let package = Package(
         // the local OpenAI-compatible transcription API.
         .package(url: "https://github.com/swhitty/FlyingFox.git", from: "0.26.0"),
         // Core ML / ANE runtime for NVIDIA Nemotron streaming ASR models.
-        .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.15.5"),
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.17.7"),
     ],
     targets: [
         .binaryTarget(

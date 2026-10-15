@@ -2,6 +2,12 @@ import Foundation
 import CWhisper
 
 final class TranscriptionService: @unchecked Sendable {
+    private let modelPathOverride: String?
+
+    init(modelPathOverride: String? = nil) {
+        self.modelPathOverride = modelPathOverride
+    }
+
     private var ctx: OpaquePointer?
     private var loadedModelPath: String?
     /// Dedicated context for the live-transcription model, loaded only when the
@@ -168,7 +174,8 @@ final class TranscriptionService: @unchecked Sendable {
                     segments.append(TranscriptionSegment(
                         start: Double(t0) / 100.0,  // convert centiseconds → seconds
                         end: Double(t1) / 100.0,
-                        text: text
+                        text: text,
+                        words: translate ? nil : Self.wordTimings(ctx: ctx, segment: i, text: text)
                     ))
                     fullText += text
                 }
@@ -243,7 +250,8 @@ final class TranscriptionService: @unchecked Sendable {
                     segments.append(TranscriptionSegment(
                         start: Double(t0) / 100.0,
                         end: Double(t1) / 100.0,
-                        text: text
+                        text: text,
+                        words: Self.wordTimings(ctx: ctx, segment: i, text: text)
                     ))
                     fullText += text
                 }
@@ -279,6 +287,21 @@ final class TranscriptionService: @unchecked Sendable {
         }
     }
 
+    /// Read raw token bytes first: multilingual tokens can split a UTF-8 character.
+    private static func wordTimings(ctx: OpaquePointer, segment: Int32,
+                                    text: String) -> [TranscriptionWord]? {
+        var tokens: [WordTiming.Token] = []
+        for index in 0..<whisper_full_n_tokens(ctx, segment) {
+            guard whisper_full_get_token_id(ctx, segment, index) < whisper_token_eot(ctx),
+                  let pointer = whisper_full_get_token_text(ctx, segment, index) else { continue }
+            let data = whisper_full_get_token_data(ctx, segment, index)
+            let bytes = UnsafeRawPointer(pointer).assumingMemoryBound(to: UInt8.self)
+            tokens.append(.init(bytes: Array(UnsafeBufferPointer(start: bytes, count: strlen(pointer))),
+                                start: Double(data.t0) / 100, end: Double(data.t1) / 100))
+        }
+        return WordTiming.words(tokens: tokens, text: text)
+    }
+
     // MARK: - Params Configuration
 
     /// Create base whisper params. `language` nil/empty means auto-detect; when
@@ -293,6 +316,7 @@ final class TranscriptionService: @unchecked Sendable {
         params.print_timestamps = false
         params.n_threads = threadCount ?? max(1, Int32(ProcessInfo.processInfo.activeProcessorCount / 2))
         params.translate = translate
+        params.token_timestamps = !translate
 
         let lang = (language?.isEmpty == false) ? language! : "auto"
         let langCStr = strdup(lang)
@@ -417,6 +441,7 @@ final class TranscriptionService: @unchecked Sendable {
     }
 
     private func resolveModelPath() -> String {
+        if let modelPathOverride { return modelPathOverride }
         // Explicitly selected downloaded model (set via Settings or the toolbar picker)
         if let selected = UserDefaults.standard.string(forKey: "selectedModelFile"),
            !selected.isEmpty {

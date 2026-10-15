@@ -96,6 +96,7 @@ struct SpeakerSummaryView: View {
                 }
                 .controlSize(.small)
                 .help("Diarize again with the current voice library")
+                .disabled(item.isTranslating)
                 Button("Identify…", systemImage: "person.text.rectangle") {
                     showAssignment = true
                 }
@@ -105,6 +106,7 @@ struct SpeakerSummaryView: View {
                     startDiarization()
                 }
                 .controlSize(.small)
+                .disabled(item.isTranslating)
             }
         }
     }

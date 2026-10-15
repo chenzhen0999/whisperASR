@@ -47,6 +47,7 @@ struct VoiceSample: Codable, Identifiable, Equatable {
     /// 256-dim speaker embedding, cached the first time a diarization pass
     /// extracts it so later passes don't redo the Core ML work.
     var embedding: [Float]?
+    var isSingleSpeaker: Bool?
 }
 
 // MARK: - Library
@@ -158,10 +159,10 @@ enum SpeakerLibrary {
 
     @discardableResult
     static func addVoiceSample(speakerID: UUID, wavFile: URL, duration: Double,
-                               sourceRecordingID: UUID?) -> VoiceSample {
+                               sourceRecordingID: UUID?, isSingleSpeaker: Bool = false) -> VoiceSample {
         let sample = VoiceSample(
             id: UUID(), speakerID: speakerID, fileURL: wavFile, duration: duration,
-            createdAt: Date(), sourceRecordingID: sourceRecordingID, embedding: nil
+            createdAt: Date(), sourceRecordingID: sourceRecordingID, embedding: nil, isSingleSpeaker: isSingleSpeaker
         )
         cache.samples.append(sample)
         persist()
@@ -193,8 +194,8 @@ enum SpeakerLibrary {
     static func knownSpeakerSamples(for speakerIDs: [UUID]? = nil) -> [KnownSpeakerSample] {
         let profiles = speakerIDs.map { ids in ids.compactMap { speaker(id: $0) } } ?? speakers
         return profiles.compactMap { profile in
-            guard let sample = samples(for: profile.id).first,
-                  FileManager.default.fileExists(atPath: sample.fileURL.path) else { return nil }
+            let available = samples(for: profile.id).filter { FileManager.default.fileExists(atPath: $0.fileURL.path) }
+            guard let sample = available.first(where: { $0.isSingleSpeaker == true }) ?? available.first else { return nil }
             return KnownSpeakerSample(
                 speakerID: profile.id,
                 sampleID: sample.id,

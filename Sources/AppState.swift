@@ -103,6 +103,7 @@ class AppState {
     func retranscribe(_ item: TranscriptionItem) {
         cancelDiarization(for: item)
         item.segments = []
+        item.diarizationSourceSegments = nil
         item.fullText = ""
         item.progress = 0
         item.translatedSegments = []
@@ -216,7 +217,7 @@ class AppState {
     }
 
     func translateItem(_ item: TranscriptionItem, targetLanguage: String) {
-        guard !item.segments.isEmpty, !item.isTranslating else { return }
+        guard !item.segments.isEmpty, !item.isTranslating, !item.isDiarizing else { return }
         item.isTranslating = true
         item.translatedSegments = Array(repeating: "", count: item.segments.count)
         item.translationLanguage = targetLanguage
@@ -297,7 +298,7 @@ class AppState {
     /// land on the main actor; only the engine itself suspends off it.
     @MainActor
     func diarizeItem(_ item: TranscriptionItem, knownSpeakerIDs: [UUID]? = nil) {
-        guard !item.segments.isEmpty, !item.isDiarizing else { return }
+        guard !item.segments.isEmpty, !item.isDiarizing, !item.isTranslating else { return }
         item.isDiarizing = true
         item.diarizationProgress = 0
         item.diarizationError = nil
@@ -322,9 +323,20 @@ class AppState {
                 }
                 // Extraction is the slow part of enrollment; cache what this pass
                 // computed so the next one reuses it.
+                try Task.checkCancellation()
                 SpeakerLibrary.cacheEmbeddings(result.extractedEmbeddings)
-                item.segments = DiarizationService.assignSpeakers(to: item.segments,
-                                                                  turns: result.turns)
+                let original = item.diarizationSourceSegments ?? item.segments
+                let aligned = DiarizationService.assignSpeakers(to: original, turns: result.turns)
+                let boundariesChanged = aligned.map(\.text) != item.segments.map(\.text)
+                item.diarizationSourceSegments = original
+                item.segments = aligned
+                if boundariesChanged && !item.translatedSegments.isEmpty {
+                    item.translatedSegments = []
+                    item.translationLanguage = nil
+                    self.showToast("Speaker boundaries changed. Translate again to update the translation.")
+                } else if original.contains(where: { $0.words == nil }) {
+                    self.showToast("Re-transcribe this recording to enable word-level speaker changes.")
+                }
                 TranscriptionStore.save(item)
             } catch is CancellationError {
                 // The item was removed or re-transcribed — nothing to report.
@@ -515,7 +527,9 @@ class AppState {
                         TranscriptionSegment(
                             start: seg.start + timeOffset,
                             end: seg.end.map { $0 + timeOffset },
-                            text: seg.text
+                            text: seg.text,
+                            words: seg.words?.map { .init(start: $0.start + timeOffset,
+                                                         end: $0.end + timeOffset, text: $0.text) }
                         )
                     }
 
@@ -530,7 +544,8 @@ class AppState {
                         }
                         if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             combined.append(TranscriptionSegment(
-                                start: seg.start, end: seg.end, text: text))
+                                start: seg.start, end: seg.end, text: text,
+                                words: text == seg.text ? seg.words : nil))
                         }
                     }
 

@@ -41,10 +41,10 @@ enum VoiceSampleExtractor {
 
         for (speakerID, speakerSegments) in bySpeaker {
             guard let profile = SpeakerLibrary.speaker(id: speakerID),
-                  let segment = bestSegment(among: speakerSegments) else { continue }
+                  let range = bestRange(among: speakerSegments) else { continue }
 
-            let start = segment.start
-            let end = min(segment.end ?? (start + idealDuration), start + maxClipDuration)
+            let start = range.start
+            let end = range.end
             let wav = makeWAV(samples: audio, start: start, end: end)
             guard !wav.isEmpty else { continue }
 
@@ -59,21 +59,21 @@ enum VoiceSampleExtractor {
             }
             SpeakerLibrary.addVoiceSample(speakerID: profile.id, wavFile: fileURL,
                                           duration: end - start,
-                                          sourceRecordingID: sourceRecordingID)
+                                          sourceRecordingID: sourceRecordingID, isSingleSpeaker: true)
             pruneOldSamples(speakerID: profile.id)
         }
     }
 
-    /// The segment closest to `idealDuration`, ignoring ones too short to carry
-    /// a voice. Longer segments stay eligible — the clip is capped at
-    /// `maxClipDuration` when cut, so only their opening seconds are used.
-    private static func bestSegment(among segments: [TranscriptionSegment]) -> TranscriptionSegment? {
-        segments
-            .filter { ($0.end ?? $0.start) - $0.start >= minDuration }
-            .min {
-                abs((($0.end ?? $0.start) - $0.start) - idealDuration)
-                    < abs((($1.end ?? $1.start) - $1.start) - idealDuration)
-            }
+    /// Require diarizer-confirmed solo speech and stay clear of speaker boundaries.
+    /// Old transcripts without this evidence must be diarized again before enrollment.
+    static func bestRange(among segments: [TranscriptionSegment]) -> SpeakerSampleRange? {
+        let ranges: [SpeakerSampleRange] = segments.flatMap { $0.speakerSampleRanges ?? [] }
+        let padded = ranges.map { range in
+            SpeakerSampleRange(start: range.start + 0.15,
+                               end: min(range.end - 0.15, range.start + 0.15 + maxClipDuration))
+        }
+        let eligible = padded.filter { $0.end - $0.start >= minDuration }
+        return eligible.min { abs(($0.end - $0.start) - idealDuration) < abs(($1.end - $1.start) - idealDuration) }
     }
 
     /// Keeps only the newest samples; `samples(for:)` returns newest first.

@@ -68,6 +68,7 @@ A native macOS app for audio transcription using [Breeze-ASR-25](https://github.
 
 - macOS 14.0+
 - Apple Silicon Mac (arm64) — the included xcframework is built for arm64
+- Swift 6.0+ toolchain for building (required by FluidAudio)
 - Python 3 with `torch`, `transformers`, `numpy`, `huggingface_hub` (only if converting the model yourself; not needed if downloading the pre-converted GGML file)
 
 ## Setup
@@ -149,7 +150,7 @@ xattr -cr /path/to/WhisperASR.app
 
 Open **Settings** (Cmd+,) to configure:
 
-- **Speakers → Use better diarization model** — with the on-device engine selected, enable full-recording offline VBx diarization. Enabling downloads and prepares the additional models immediately, with progress and retryable errors. Recordings stay on your Mac. Disable it to return to the standard local pipeline; downloaded models remain cached for reuse.
+- **Speakers → Local speaker model** — choose Nemotron 3 (up to eight speakers), full-recording Offline VBx (automatic speaker count), or legacy Pyannote / WeSpeaker. Nemotron downloads about 190 MB on first use; selecting VBx prepares its models immediately. All three run locally and keep their models cached. Speaker turns split transcripts at word boundaries; re-transcribe older recordings to obtain word timings. Re-running diarization uses the original ASR segments. If splitting changes an existing translation's segments, translate again to regenerate it.
 - **Target Language** — choose a language to translate transcriptions into
 - **OpenAI Translation API** — only the API key is required; endpoint defaults to OpenAI, model defaults to `gpt-5.4`. Any OpenAI-compatible endpoint (including local models) works. Translation and meeting minutes use the selected model's default sampling settings, including reasoning models that reject explicit temperature values.
 - **Speech Recognition Models** — download, select, or delete models; the selected model is used for all transcription
@@ -157,13 +158,24 @@ Open **Settings** (Cmd+,) to configure:
 
 ### Diarization checks
 
-Run `swift test` to verify engine selection. To also download/load the offline models and verify local inference and known-voice matching, provide a speech file:
+Run `swift test` to verify word alignment, text preservation, voice matching, compatibility, and engine selection. To also download/load the offline models and verify local inference and known-voice matching, provide a speech file:
 
 ```bash
 VBX_TEST_AUDIO=/path/to/single-speaker-speech.wav swift test --filter DiarizationTests
 ```
 
 The integration check creates a temporary reference clip and leaves the downloaded models cached in `~/Library/Application Support/WhisperASR/Models/Diarization-VBx/`.
+
+To compare all three local engines with the same ASR output:
+
+```bash
+DIARIZATION_TEST_AUDIO=/path/to/recording.mp3 \
+DIARIZATION_TEST_MODEL="$HOME/Library/Application Support/WhisperASR/Models/ggml-large-v3-turbo.bin" \
+swift test --filter DiarizationComparisonTests
+```
+
+The report defaults to `/private/tmp/whisperasr-diarization-comparison.json`. Projection errors measure lost speaker information when attaching each engine's turns to transcript text; they are not accuracy scores against human annotations. Optional `DIARIZATION_TEST_REFERENCE` accepts JSON turns with `start`, `end`, and `speaker` for reference DER (250 ms collar). Set `DIARIZATION_TEST_OUTPUT_DIRECTORY` to export private before/after SRT and timed JSON files for listening review. See [validation results](docs/diarization-validation.md).
+
 
 ## Project Structure
 

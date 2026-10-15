@@ -104,7 +104,12 @@ struct OfflineDiarizationProvider: DiarizationProvider {
 
         let clusters = Self.voiceEmbeddings(in: result).sorted { $0.key < $1.key }
             .map { (id: $0.key, embedding: $0.value) }
-        let identities = SpeakerEmbeddingMatcher.assign(clusters: clusters, references: references)
+        let rawTurns = result.segments.map {
+            SpeakerTurn(start: Double($0.startTimeSeconds), end: Double($0.endTimeSeconds),
+                        label: $0.speakerId, speakerID: nil)
+        }
+        let identities = SpeakerEmbeddingMatcher.assign(clusters: clusters, references: references,
+                                                        turns: rawTurns)
         let names = Dictionary(knownSpeakers.map { ($0.speakerID, $0.name) },
                                uniquingKeysWith: { first, _ in first })
         let turns = result.segments.map { segment in

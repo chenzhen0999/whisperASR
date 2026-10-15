@@ -11,6 +11,7 @@ struct SettingsView: View {
 
     @AppStorage(DiarizationService.useRemoteKey) private var diarizationUseRemote = false
     @AppStorage(DiarizationService.useOfflineKey) private var diarizationUseOffline = false
+    @AppStorage(DiarizationService.useNemotronKey) private var diarizationUseNemotron = false
     @State private var offlineDiarizationModels = OfflineDiarizationModels.shared
     /// The voice library has no observable store, so the list is snapshotted when
     /// Settings opens and kept in step as the user deletes from it.
@@ -184,12 +185,24 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
 
                 if !diarizationUseRemote {
-                    Toggle("Use better diarization model", isOn: $diarizationUseOffline)
-                        .disabled(offlineDiarizationModels.isDownloading)
-                        .onChange(of: diarizationUseOffline) { _, enabled in
-                            if enabled { prepareOfflineDiarization() }
+                    Picker("Local speaker model", selection: Binding(
+                        get: { diarizationUseNemotron ? "nemotron" : (diarizationUseOffline ? "vbx" : "legacy") },
+                        set: { model in
+                            diarizationUseNemotron = model == "nemotron"
+                            diarizationUseOffline = model == "vbx"
                         }
-                    Text("Analyzes the full recording for better speaker separation. Downloads additional models when enabled; audio stays on this Mac. Turning this off keeps the downloaded models.")
+                    )) {
+                        Text("Nemotron 3 (up to 8 speakers)").tag("nemotron")
+                        Text("Offline VBx (automatic speaker count)").tag("vbx")
+                        Text("Legacy Pyannote / WeSpeaker").tag("legacy")
+                    }
+                    .disabled(offlineDiarizationModels.isDownloading)
+                    .onChange(of: diarizationUseOffline) { _, enabled in
+                        if enabled { prepareOfflineDiarization() }
+                    }
+                    Text(diarizationUseNemotron
+                         ? "Eight-speaker diarization with word-level alignment. Downloads about 190 MB on first use; audio stays on this Mac. Use VBx for recordings with more than eight speakers."
+                         : "VBx analyzes the full recording for speaker separation. Legacy uses incremental speaker tracking. Word timings let either model split the transcript when speakers change. Models download when needed; audio stays on this Mac.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if offlineDiarizationModels.isDownloading {
