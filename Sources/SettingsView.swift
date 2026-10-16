@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage(DiarizationService.useRemoteKey) private var diarizationUseRemote = false
     @AppStorage(DiarizationService.useOfflineKey) private var diarizationUseOffline = false
     @AppStorage(DiarizationService.useNemotronKey) private var diarizationUseNemotron = false
+    @AppStorage(DiarizationService.useSpeakerKitKey) private var diarizationUseSpeakerKit = false
     @State private var offlineDiarizationModels = OfflineDiarizationModels.shared
     /// The voice library has no observable store, so the list is snapshotted when
     /// Settings opens and kept in step as the user deletes from it.
@@ -186,12 +187,14 @@ struct SettingsView: View {
 
                 if !diarizationUseRemote {
                     Picker("Local speaker model", selection: Binding(
-                        get: { diarizationUseNemotron ? "nemotron" : (diarizationUseOffline ? "vbx" : "legacy") },
+                        get: { diarizationUseSpeakerKit ? "speakerkit" : (diarizationUseNemotron ? "nemotron" : (diarizationUseOffline ? "vbx" : "legacy")) },
                         set: { model in
+                            diarizationUseSpeakerKit = model == "speakerkit"
                             diarizationUseNemotron = model == "nemotron"
                             diarizationUseOffline = model == "vbx"
                         }
                     )) {
+                        Text("SpeakerKit / Pyannote (Argmax)").tag("speakerkit")
                         Text("Nemotron 3 (up to 8 speakers)").tag("nemotron")
                         Text("Offline VBx (automatic speaker count)").tag("vbx")
                         Text("Legacy Pyannote / WeSpeaker").tag("legacy")
@@ -200,22 +203,26 @@ struct SettingsView: View {
                     .onChange(of: diarizationUseOffline) { _, enabled in
                         if enabled { prepareOfflineDiarization() }
                     }
-                    Text(diarizationUseNemotron
+                    Text(diarizationUseSpeakerKit
+                         ? "Argmax's open-source Pyannote community-1 pipeline analyzes the full recording with automatic speaker counting. Models download on first use; audio and voice references stay on this Mac."
+                         : diarizationUseNemotron
                          ? "Eight-speaker diarization with word-level alignment. Downloads about 190 MB on first use; audio stays on this Mac. Use VBx for recordings with more than eight speakers."
                          : "VBx analyzes the full recording for speaker separation. Legacy uses incremental speaker tracking. Word timings let either model split the transcript when speakers change. Models download when needed; audio stays on this Mac.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    if offlineDiarizationModels.isDownloading {
-                        ProgressView("Downloading and preparing diarization models…",
-                                     value: offlineDiarizationModels.progress)
-                    } else if let error = offlineDiarizationModels.error {
-                        Text("Couldn't prepare the models: \(error). Enable the option to retry.")
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    } else if offlineDiarizationModels.isReady {
-                        Label("Better diarization model downloaded", systemImage: "checkmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    if diarizationUseOffline && !diarizationUseSpeakerKit && !diarizationUseNemotron {
+                        if offlineDiarizationModels.isDownloading {
+                            ProgressView("Downloading and preparing diarization models…",
+                                         value: offlineDiarizationModels.progress)
+                        } else if let error = offlineDiarizationModels.error {
+                            Text("Couldn't prepare the models: \(error). Enable the option to retry.")
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        } else if offlineDiarizationModels.isReady {
+                            Label("Better diarization model downloaded", systemImage: "checkmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -388,12 +395,12 @@ struct SettingsView: View {
         }
         .onAppear {
             knownSpeakers = SpeakerLibrary.speakers
-            if diarizationUseOffline && !diarizationUseRemote {
+            if diarizationUseOffline && !diarizationUseSpeakerKit && !diarizationUseNemotron && !diarizationUseRemote {
                 prepareOfflineDiarization()
             }
         }
         .onChange(of: diarizationUseRemote) { _, remote in
-            if !remote && diarizationUseOffline { prepareOfflineDiarization() }
+            if !remote && diarizationUseOffline && !diarizationUseSpeakerKit && !diarizationUseNemotron { prepareOfflineDiarization() }
         }
     }
 

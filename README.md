@@ -68,7 +68,7 @@ A native macOS app for audio transcription using [Breeze-ASR-25](https://github.
 
 - macOS 14.0+
 - Apple Silicon Mac (arm64) — the included xcframework is built for arm64
-- Swift 6.0+ toolchain for building (required by FluidAudio)
+- Swift 6.2+ toolchain for building (enables dependency feature selection)
 - Python 3 with `torch`, `transformers`, `numpy`, `huggingface_hub` (only if converting the model yourself; not needed if downloading the pre-converted GGML file)
 
 ## Setup
@@ -107,6 +107,8 @@ This downloads the Breeze-ASR-25 model from HuggingFace, clones the necessary re
 swift build
 swift run
 ```
+
+SpeakerKit is the only linked Argmax product. FluidAudio's optional Rust text-normalization engine is disabled to avoid shipping unused tables and code.
 
 Or open in Xcode:
 
@@ -150,7 +152,7 @@ xattr -cr /path/to/WhisperASR.app
 
 Open **Settings** (Cmd+,) to configure:
 
-- **Speakers → Local speaker model** — choose Nemotron 3 (up to eight speakers), full-recording Offline VBx (automatic speaker count), or legacy Pyannote / WeSpeaker. Nemotron downloads about 190 MB on first use; selecting VBx prepares its models immediately. All three run locally and keep their models cached. Speaker turns split transcripts at word boundaries; re-transcribe older recordings to obtain word timings. Re-running diarization uses the original ASR segments. If splitting changes an existing translation's segments, translate again to regenerate it.
+- **Speakers → Local speaker model** — choose SpeakerKit / Pyannote (Argmax's open-source community-1 pipeline), Nemotron 3 (up to eight speakers), full-recording Offline VBx (automatic speaker count), or legacy Pyannote / WeSpeaker. Nemotron downloads about 190 MB on first use; selecting VBx prepares its models immediately. All four run locally and keep their models cached. SpeakerKit downloads its models on first use and matches known voices using its own acoustic embeddings; no Argmax account or API key is required. Speaker turns split transcripts at word boundaries; re-transcribe older recordings to obtain word timings. Re-running diarization uses the original ASR segments. If splitting changes an existing translation's segments, translate again to regenerate it.
 - **Target Language** — choose a language to translate transcriptions into
 - **OpenAI Translation API** — only the API key is required; endpoint defaults to OpenAI, model defaults to `gpt-5.4`. Any OpenAI-compatible endpoint (including local models) works. Translation and meeting minutes use the selected model's default sampling settings, including reasoning models that reject explicit temperature values.
 - **Speech Recognition Models** — download, select, or delete models; the selected model is used for all transcription
@@ -166,13 +168,17 @@ VBX_TEST_AUDIO=/path/to/single-speaker-speech.wav swift test --filter Diarizatio
 
 The integration check creates a temporary reference clip and leaves the downloaded models cached in `~/Library/Application Support/WhisperASR/Models/Diarization-VBx/`.
 
-To compare all three local engines with the same ASR output:
+To compare all four local engines with the same ASR output:
 
 ```bash
 DIARIZATION_TEST_AUDIO=/path/to/recording.mp3 \
 DIARIZATION_TEST_MODEL="$HOME/Library/Application Support/WhisperASR/Models/ggml-large-v3-turbo.bin" \
 swift test --filter DiarizationComparisonTests
 ```
+
+To check SpeakerKit inference and reference-voice recognition directly, run `SPEAKERKIT_TEST_AUDIO=/path/to/clean-single-speaker.wav swift test --filter SpeakerKitDiarizationTests`.
+
+To reuse a previously exported ASR result, set `DIARIZATION_TEST_ASR=/private/path/asr.json` instead of `DIARIZATION_TEST_MODEL`. It must come from the same audio file. Set `DIARIZATION_TEST_ENGINES=speakerkit` to run only the new engine (or a comma-separated list of `legacy,vbx,nemotron,speakerkit`).
 
 The report defaults to `/private/tmp/whisperasr-diarization-comparison.json`. Projection errors measure lost speaker information when attaching each engine's turns to transcript text; they are not accuracy scores against human annotations. Optional `DIARIZATION_TEST_REFERENCE` accepts JSON turns with `start`, `end`, and `speaker` for reference DER (250 ms collar). Set `DIARIZATION_TEST_OUTPUT_DIRECTORY` to export private before/after SRT and timed JSON files for listening review. See [validation results](docs/diarization-validation.md).
 

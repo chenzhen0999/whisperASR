@@ -5,11 +5,13 @@ enum DiarizationService {
     static let useRemoteKey = "diarizationUseRemote"
     static let useOfflineKey = "diarizationUseOfflineVBx"
     static let useNemotronKey = "diarizationUseNemotron"
+    static let useSpeakerKitKey = "diarizationUseSpeakerKit"
 
     static func provider(defaults: UserDefaults = .standard) -> DiarizationProvider {
         if defaults.bool(forKey: useRemoteKey) {
             return OpenAIDiarizationProvider(apiKey: defaults.string(forKey: "translationAPIKey") ?? "")
         }
+        if defaults.bool(forKey: useSpeakerKitKey) { return SpeakerKitDiarizationProvider() }
         if defaults.bool(forKey: useNemotronKey) { return NemotronDiarizationProvider() }
         if defaults.bool(forKey: useOfflineKey) { return OfflineDiarizationProvider() }
         return LocalDiarizationProvider()

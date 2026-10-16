@@ -46,7 +46,7 @@ enum DiarizationError: LocalizedError {
 // MARK: - Provider
 
 /// Abstraction over a speaker diarization engine. Providers either run on-device
-/// (FluidAudio / Core ML) or call a remote API (OpenAI gpt-4o-transcribe-diarize).
+/// (FluidAudio or SpeakerKit / Core ML) or call a remote API (OpenAI gpt-4o-transcribe-diarize).
 ///
 /// Implementations honour task cancellation: they call `Task.checkCancellation()`
 /// at their suspension points rather than taking a cancellation callback.

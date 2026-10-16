@@ -8,13 +8,20 @@ final class DiarizationComparisonTests: XCTestCase {
     @MainActor
     func testCompareLocalEnginesAndWordAlignment() async throws {
         let environment = ProcessInfo.processInfo.environment
-        guard let path = environment["DIARIZATION_TEST_AUDIO"],
-              let modelPath = environment["DIARIZATION_TEST_MODEL"] else {
-            throw XCTSkip("Set DIARIZATION_TEST_AUDIO and DIARIZATION_TEST_MODEL to compare actual inference.")
+        guard let path = environment["DIARIZATION_TEST_AUDIO"] else {
+            throw XCTSkip("Set DIARIZATION_TEST_AUDIO and a model or saved ASR result to compare actual inference.")
         }
         let url = URL(fileURLWithPath: path)
-        let service = TranscriptionService(modelPathOverride: modelPath)
-        let transcription = try await service.transcribe(fileURL: url, onProgress: { _ in })
+        let transcription: TranscriptionResult
+        if let saved = environment["DIARIZATION_TEST_ASR"] {
+            transcription = try JSONDecoder().decode(TranscriptionResult.self,
+                from: Data(contentsOf: URL(fileURLWithPath: saved)))
+        } else if let modelPath = environment["DIARIZATION_TEST_MODEL"] {
+            let service = TranscriptionService(modelPathOverride: modelPath)
+            transcription = try await service.transcribe(fileURL: url, onProgress: { _ in })
+        } else {
+            throw XCTSkip("Set DIARIZATION_TEST_MODEL or DIARIZATION_TEST_ASR.")
+        }
         XCTAssertFalse(transcription.segments.isEmpty)
         let timed = transcription.segments.filter { $0.words != nil }
         let linguistic = transcription.segments.filter { $0.text.contains(where: { $0.isLetter || $0.isNumber }) }
@@ -27,9 +34,15 @@ final class DiarizationComparisonTests: XCTestCase {
             "words": timed.flatMap { $0.words ?? [] }.count,
             "note": "Projection errors measure agreement with each engine's own turns, not human-annotated accuracy."
         ]
-        let providers: [DiarizationProvider] = [LocalDiarizationProvider(), OfflineDiarizationProvider(), NemotronDiarizationProvider()]
+        let choices: [(String, any DiarizationProvider)] = [
+            ("legacy", LocalDiarizationProvider()), ("vbx", OfflineDiarizationProvider()),
+            ("nemotron", NemotronDiarizationProvider()), ("speakerkit", SpeakerKitDiarizationProvider())
+        ]
+        let requested = environment["DIARIZATION_TEST_ENGINES"]?.split(separator: ",").map(String.init)
+        let providers = choices.filter { requested?.contains($0.0) ?? true }
+        XCTAssertFalse(providers.isEmpty)
         var rows: [[String: Any]] = []
-        for provider in providers {
+        for (name, provider) in providers {
             let start = Date()
             let result = try await provider.diarize(audioURL: url, knownSpeakers: [], progress: { _ in })
             XCTAssertFalse(result.turns.isEmpty, provider.displayName)
@@ -68,7 +81,6 @@ final class DiarizationComparisonTests: XCTestCase {
             if let directory = environment["DIARIZATION_TEST_OUTPUT_DIRECTORY"] {
                 let folder = URL(fileURLWithPath: directory, isDirectory: true)
                 try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-                let name = provider is NemotronDiarizationProvider ? "nemotron" : (provider is OfflineDiarizationProvider ? "vbx" : "legacy")
                 try SubtitleFormatter.makeSRT(split).write(to: folder.appendingPathComponent(name + ".srt"),
                                                           atomically: true, encoding: .utf8)
                 try JSONEncoder().encode(split).write(to: folder.appendingPathComponent(name + ".json"))

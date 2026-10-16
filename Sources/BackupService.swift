@@ -45,6 +45,7 @@ enum BackupService {
         var diarizationUseRemote: Bool?
         var diarizationUseOffline: Bool?
         var diarizationUseNemotron: Bool?
+        var diarizationUseSpeakerKit: Bool?
     }
 
     // MARK: - Export
@@ -72,7 +73,9 @@ enum BackupService {
             diarizationUseOffline: d.object(forKey: DiarizationService.useOfflineKey) == nil
                 ? nil : d.bool(forKey: DiarizationService.useOfflineKey),
             diarizationUseNemotron: d.object(forKey: DiarizationService.useNemotronKey) == nil
-                ? nil : d.bool(forKey: DiarizationService.useNemotronKey)
+                ? nil : d.bool(forKey: DiarizationService.useNemotronKey),
+            diarizationUseSpeakerKit: d.object(forKey: DiarizationService.useSpeakerKitKey) == nil
+                ? nil : d.bool(forKey: DiarizationService.useSpeakerKitKey)
         )
 
         return BackupFile(
@@ -124,6 +127,7 @@ enum BackupService {
         set(c.selectedMinutesPromptID, MinutesPromptStore.selectedKey)
         if let tokens = c.minutesContextTokens { d.set(tokens, forKey: MinutesPromptStore.contextTokensKey) }
         if let remote = c.diarizationUseRemote { d.set(remote, forKey: DiarizationService.useRemoteKey) }
+        if let speakerKit = c.diarizationUseSpeakerKit { d.set(speakerKit, forKey: DiarizationService.useSpeakerKitKey) }
         if let nemotron = c.diarizationUseNemotron { d.set(nemotron, forKey: DiarizationService.useNemotronKey) }
         if let offline = c.diarizationUseOffline { d.set(offline, forKey: DiarizationService.useOfflineKey) }
         MinutesPromptStore.shared.reloadFromDefaults()

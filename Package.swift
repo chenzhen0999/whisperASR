@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
@@ -9,7 +9,9 @@ let package = Package(
         // the local OpenAI-compatible transcription API.
         .package(url: "https://github.com/swhitty/FlyingFox.git", from: "0.26.0"),
         // Core ML / ANE runtime for NVIDIA Nemotron streaming ASR models.
-        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.17.7"),
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.17.7", traits: []),
+        // Open-source Pyannote community-1 diarization from Argmax.
+        .package(url: "https://github.com/argmaxinc/argmax-oss-swift.git", exact: "1.1.1"),
     ],
     targets: [
         .binaryTarget(
@@ -21,6 +23,7 @@ let package = Package(
             dependencies: [
                 "CWhisper",
                 .product(name: "FluidAudio", package: "FluidAudio"),
+                .product(name: "SpeakerKit", package: "argmax-oss-swift"),
                 .product(name: "FlyingFox", package: "FlyingFox"),
                 .product(name: "FlyingSocks", package: "FlyingFox"),
             ],
@@ -40,5 +43,6 @@ let package = Package(
             dependencies: ["WhisperASR"],
             path: "Tests/WhisperASRTests"
         )
-    ]
+    ],
+    swiftLanguageModes: [.v5]
 )

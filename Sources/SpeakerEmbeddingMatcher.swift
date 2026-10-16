@@ -4,7 +4,8 @@ import Foundation
 // MARK: - Speaker Embedding Matcher
 
 /// Matches diarization clusters to known voices by cosine similarity of their
-/// speaker embeddings (256-dim, L2-normalized by the embedding model).
+/// speaker embeddings. Callers must extract clusters and references with the
+/// same model; vectors from different diarization engines are incompatible.
 ///
 /// The diarizer already recognizes voices it was enrolled with, but it only does
 /// so when a cluster is close enough for *its* threshold. This is the second
