@@ -41,6 +41,17 @@ Nemotron is a streaming model, so captions appear with low delay. Larger Whisper
 
 ## Installation
 
+### Quick start: download the app (no build needed)
+1. Download `WhisperASR-LiveCaption.zip` from the [latest release](https://github.com/chenzhen0999/whisperASR/releases/latest) and unzip it.
+2. Drag `WhisperASR.app` into **Applications**.
+3. The app is not notarized by Apple, so run this once in Terminal before opening it:
+   ```bash
+   xattr -cr /Applications/WhisperASR.app
+   ```
+4. Open the app, then follow steps 3–5 below (speech model, translation, live captions).
+
+### Build from source
+
 ### 1. Requirements
 - Apple Silicon Mac (M1 or newer), macOS 14 or later
 - Xcode or the Command Line Tools (`xcode-select --install`), Swift 6.1+

@@ -41,6 +41,17 @@ Nemotron 是流式模型，字幕延迟很低。体积大的 Whisper 模型转�
 
 ## 安装方法
 
+### 快速开始：直接下载 App（不用编译）
+1. 从 [最新 Release](https://github.com/chenzhen0999/whisperASR/releases/latest) 下载 `WhisperASR-LiveCaption.zip`，解压。
+2. 把 `WhisperASR.app` 拖进「应用程序」文件夹。
+3. 这个 App 没有经过苹果公证，第一次打开前在「终端」运行一次：
+   ```bash
+   xattr -cr /Applications/WhisperASR.app
+   ```
+4. 打开 App，然后按下面第 3–5 步设置语音模型、翻译和实时字幕。
+
+### 从源码编译
+
 ### 1. 准备
 - Apple 芯片的 Mac（M1 及以上），macOS 14 或更新
 - 安装 Xcode 或命令行工具（终端运行 `xcode-select --install`），Swift 6.1 以上
