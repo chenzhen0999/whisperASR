@@ -1,4 +1,105 @@
-# WhisperASR
+# WhisperASR — Live Caption Edition
+
+[简体中文说明](README_zh.md) · [繁體中文（原專案）](README.zh-TW.md)
+
+> A fork of [plateaukao/whisperASR](https://github.com/plateaukao/whisperASR), tuned for **watching livestreams and videos that have no subtitles**: fast on-device speech recognition plus free cloud translation, shown as large, readable captions that float over your video.
+>
+> All credit for the original app goes to [@plateaukao](https://github.com/plateaukao). This fork is distributed under the same [Apache License 2.0](LICENSE). The changes made in this fork are listed below.
+
+## What this fork changes
+
+### Live caption window
+- **Outlined captions** — white text with a thick black outline (like movie subtitles), readable on any background. The translation line is light cyan so you can tell it apart from the original at a glance.
+- **Stepped font size** — a font-size button in the bottom bar cycles through 18 → 22 → 28 → 34 → 40 pt.
+- **Transparent background** — a transparency button cycles the window background through 35% → 15% → 0% (fully transparent) → 55%, so you can lay the captions directly over the video.
+
+### History / transcript page
+- **Independent font size** — its own font-size button in the toolbar (18 → 22 → 28 → 34 → 40), separate from the live caption size.
+- **Select & copy text** — drag to select any part of the original text or the translation, then press Cmd+C.
+- **Click the timestamp to seek** — seeking moved from the whole row to the timestamp, so selecting text no longer jumps the audio.
+
+### Settings
+- Two separate font pickers under **Appearance**: *Live Caption Font* and *History Transcript Font*.
+
+### Translation quality & speed
+- Whisper's short fragments are **merged into whole sentences** before display and translation, so translations read naturally instead of word-by-word.
+- Translation requests are **capped at 6 lines per batch** with automatic follow-up passes, so a backlog never turns into one huge, slow request.
+- If the model returns the wrong number of lines, the app **falls back to translating each line on its own**, so translations never get misaligned or left blank.
+- A clearer translation prompt (natural, complete sentences) and a longer 60 s timeout.
+
+### Build
+- `swift-tools-version` lowered to 6.1 so it builds with the Swift that ships with current Xcode / Command Line Tools.
+
+## Recommended setup: fast and free
+
+| Part | What to use | Cost |
+|---|---|---|
+| Speech recognition | **NVIDIA Nemotron 3.5 Multilingual** (streaming, runs locally on the Apple Neural Engine) | Free, offline |
+| Translation | **Zhipu GLM `glm-4.7-flash`** (OpenAI-compatible API) | Free |
+
+Nemotron is a streaming model, so captions appear with low delay. Larger Whisper models are more accurate on recordings but are noticeably slower for live use.
+
+## Installation
+
+### 1. Requirements
+- Apple Silicon Mac (M1 or newer), macOS 14 or later
+- Xcode or the Command Line Tools (`xcode-select --install`), Swift 6.1+
+- Git
+
+### 2. Build and install
+
+```bash
+git clone https://github.com/chenzhen0999/whisperASR.git
+cd whisperASR
+bash Scripts/build_release.sh
+cp -R WhisperASR.app /Applications/
+xattr -cr /Applications/WhisperASR.app
+open /Applications/WhisperASR.app
+```
+
+The first build takes a few minutes. `xattr -cr` removes the "cannot be opened" block for unsigned apps.
+
+### 3. Download the speech model
+Open **Settings** (Cmd+,) → **Speech Recognition Models**, download **Nemotron 3.5 Multilingual**, and select it.
+
+### 4. Set up free translation (Zhipu)
+1. Sign up at [Zhipu BigModel](https://open.bigmodel.cn/) and create an API key in the console.
+2. In **Settings → OpenAI Translation API**, fill in:
+   - **API Endpoint:** `https://open.bigmodel.cn/api/paas/v4`
+   - **Model:** `glm-4.7-flash`
+   - **API Key:** your Zhipu key
+3. Set **Target Language** to the language you want captions in.
+
+If `glm-4.7-flash` reports it is busy (error 1305), switch the model to `glm-4-flash-250414`, which is also free.
+
+### 5. Start live captions
+1. Click the record button and choose the app that is playing audio (for example your browser).
+2. Turn on live transcription and start recording.
+3. macOS will ask for **Screen Recording** permission the first time: allow it in System Settings → Privacy & Security, then restart the app.
+4. Use the bottom-bar buttons to change the font size and the background transparency.
+
+### Updating
+```bash
+cd whisperASR && git pull
+bash Scripts/build_release.sh
+cp -R WhisperASR.app /Applications/
+tccutil reset ScreenCapture com.whisperasr.app
+```
+Each rebuild changes the app's signature, so reset and grant Screen Recording again after updating.
+
+## Support the author
+
+If this saves you time, feel free to get in touch or buy me a coffee.
+
+| WhatsApp | Alipay — tip the author |
+|---|---|
+| <img src="docs/donate/whatsapp.jpg" width="220"> | <img src="docs/donate/alipay.jpg" width="220"> |
+
+---
+
+## Original README
+
+# WhisperASR (original project)
 
 [繁體中文](README.zh-TW.md)
 

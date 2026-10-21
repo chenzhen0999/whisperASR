@@ -2,7 +2,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct SettingsView: View {
-    @AppStorage("transcriptFontSize") private var transcriptFontSize = TranscriptFontSize.normal.rawValue
+    @AppStorage("liveTranscriptFontSize") private var liveTranscriptFontSize = TranscriptFontSize.s28.rawValue
+    @AppStorage("detailTranscriptFontSize") private var detailTranscriptFontSize = TranscriptFontSize.s22.rawValue
     @AppStorage("modelPath") private var modelPath = ""
     @AppStorage("targetLanguage") private var targetLanguage = ""
     @AppStorage("translationEndpoint") private var translationEndpoint = ""
@@ -53,7 +54,13 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Appearance") {
-                Picker("Transcript Font Size", selection: $transcriptFontSize) {
+                Picker("Live Caption Font", selection: $liveTranscriptFontSize) {
+                    ForEach(TranscriptFontSize.allCases, id: \.rawValue) { size in
+                        Text(size.label).tag(size.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Picker("History Transcript Font", selection: $detailTranscriptFontSize) {
                     ForEach(TranscriptFontSize.allCases, id: \.rawValue) { size in
                         Text(size.label).tag(size.rawValue)
                     }

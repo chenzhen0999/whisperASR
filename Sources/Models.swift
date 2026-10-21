@@ -5,39 +5,33 @@ import SwiftUI
 // MARK: - Transcript Font Size
 
 enum TranscriptFontSize: String, CaseIterable {
-    case small, normal, large
+    case s18, s22, s28, s34, s40
 
     var label: String {
         switch self {
-        case .small: return "Small"
-        case .normal: return "Normal"
-        case .large: return "Large"
+        case .s18: return "18"
+        case .s22: return "22"
+        case .s28: return "28"
+        case .s34: return "34"
+        case .s40: return "40"
         }
     }
 
-    var bodyFont: Font {
+    var bodyPointSize: CGFloat {
         switch self {
-        case .small: return .caption
-        case .normal: return .body
-        case .large: return .title3
+        case .s18: return 18
+        case .s22: return 22
+        case .s28: return 28
+        case .s34: return 34
+        case .s40: return 40
         }
     }
 
-    var translationFont: Font {
-        switch self {
-        case .small: return .caption2
-        case .normal: return .callout
-        case .large: return .body
-        }
-    }
+    var translationPointSize: CGFloat { bodyPointSize + (bodyPointSize >= 28 ? 4 : 2) }
 
-    var timestampFont: Font {
-        switch self {
-        case .small: return .system(.caption2, design: .monospaced)
-        case .normal: return .system(.caption, design: .monospaced)
-        case .large: return .system(.footnote, design: .monospaced)
-        }
-    }
+    var bodyFont: Font { .system(size: bodyPointSize, weight: .medium) }
+    var translationFont: Font { .system(size: translationPointSize, weight: .semibold) }
+    var timestampFont: Font { .system(size: max(11, bodyPointSize * 0.4), design: .monospaced) }
 }
 
 // MARK: - Transcription Segment

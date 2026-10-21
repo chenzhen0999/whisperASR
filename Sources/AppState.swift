@@ -479,7 +479,7 @@ class AppState {
                     lastTranscribedTotal = totalSamples
                     recorder.trimSamples(upTo: max(0, sealedSampleCount - contextSamples))
                     consecutiveSilenceCount += 1
-                    let snapshot = sealedSegments
+                    let snapshot = Self.mergeSegmentsForDisplay(sealedSegments)
                     await MainActor.run {
                         self.liveSegments = snapshot
                         self.throttledAutoSave()
@@ -566,7 +566,7 @@ class AppState {
                     var sealAdvanced = false
                     if newSeal > sealedSampleCount {
                         let sealTime = Double(newSeal) / 16000.0
-                        sealedSegments = combined.filter { $0.start < sealTime }
+                        sealedSegments = Self.mergeSegmentsForDisplay(combined.filter { $0.start < sealTime })
                         sealedSampleCount = newSeal
                         sealedClean = newSealClean
                         sealAdvanced = true
@@ -575,7 +575,7 @@ class AppState {
                         recorder.trimSamples(upTo: max(0, newSeal - (newSealClean ? 0 : contextSamples)))
                     }
 
-                    let snapshot = combined
+                    let snapshot = Self.mergeSegmentsForDisplay(combined)
                     await MainActor.run {
                         self.liveSegments = snapshot
                         self.throttledAutoSave()
@@ -646,6 +646,37 @@ class AppState {
     /// single character (Mandarin is dense — the previous 4-char floor missed most overlaps) and
     /// boundary punctuation/whitespace is stripped so a comma/period whisper added at the cut can't
     /// block the match.
+
+    /// Join Whisper's short fragments into sentence-like lines for display/translation.
+    /// Quark-style paragraph translation needs longer units than whisper's default cuts.
+    static func mergeSegmentsForDisplay(_ segments: [TranscriptionSegment]) -> [TranscriptionSegment] {
+        guard var current = segments.first else { return [] }
+        var result: [TranscriptionSegment] = []
+        let endings: Set<Character> = [".", "!", "?", "。", "！", "？", "…", ":", "：" ]
+        for next in segments.dropFirst() {
+            let prevText = current.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let nextText = next.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let gap = next.start - (current.end ?? current.start)
+            let endsSentence = prevText.last.map { endings.contains($0) } ?? true
+            let combinedLen = prevText.count + 1 + nextText.count
+            if gap < 0.9, !endsSentence, combinedLen <= 220, !nextText.isEmpty {
+                let joined = prevText.isEmpty ? nextText : (prevText + " " + nextText)
+                let words = (current.words ?? []) + (next.words ?? [])
+                current = TranscriptionSegment(
+                    start: current.start,
+                    end: next.end ?? current.end,
+                    text: joined,
+                    words: words.isEmpty ? nil : words
+                )
+            } else {
+                result.append(current)
+                current = next
+            }
+        }
+        result.append(current)
+        return result
+    }
+
     static func trimOverlap(previous: String, current: String) -> String {
         var source = previous.trimmingCharacters(in: .whitespaces)
         while let last = source.unicodeScalars.last, overlapTrimChars.contains(last) {
@@ -847,7 +878,10 @@ class AppState {
         }()
         let dirtyIndex = max(firstDirtyIndex, firstUnsealedIndex)
 
-        let textsToTranslate = Array(texts.dropFirst(dirtyIndex))
+        // Cap the batch so a growing backlog never becomes one huge, slow request
+        // (the cause of long untranslated stretches with a local model). The rest
+        // is picked up by the follow-up pass queued below.
+        let textsToTranslate = Array(texts.dropFirst(dirtyIndex).prefix(6))
         guard !textsToTranslate.isEmpty else {
             // Nothing to translate, but still need to update seal counts for stable suffix.
             if countsSeals {
@@ -877,6 +911,13 @@ class AppState {
                 }
                 self.translationFailureCount = 0
                 self.liveTranslationError = nil
+                // More segments still waiting? Queue a follow-up pass right away
+                // (unless a newer snapshot is already pending).
+                if self.liveTranslatedSegments.count < texts.count,
+                   self.pendingTranslationSnapshot == nil,
+                   !self.liveTranslationPaused {
+                    self.pendingTranslationSnapshot = (segments: segments, countsSeals: false)
+                }
             }
         } catch let err as TranslationError {
             print("[Translation] OpenAI error: \(err)")

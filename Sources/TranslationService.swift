@@ -113,14 +113,14 @@ enum TranslationService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 30
+        request.timeoutInterval = 60
 
         // Reasoning models can reject explicit temperature values; use the
         // selected model's default sampling settings.
         let body: [String: Any] = [
             "model": effectiveModel,
             "messages": [
-                ["role": "system", "content": "You are a translator for a live transcription. Translate each numbered line to \(languageName). If a line is already in \(languageName), output it unchanged. Output ONLY the translations in the same numbered format (e.g. \"1. ...\"). Keep exactly \(segmentTexts.count) lines.\(contextSection)"],
+                ["role": "system", "content": "You are a translator for live speech captions. Translate each numbered line to \(languageName) as a natural, complete sentence or short paragraph — not word-by-word fragments. If a line is already in \(languageName), output it unchanged. Output ONLY the translations in the same numbered format (e.g. \"1. ...\"). Keep exactly \(segmentTexts.count) lines.\(contextSection)"],
                 ["role": "user", "content": numberedInput]
             ]
         ]
@@ -148,12 +148,29 @@ enum TranslationService {
                 return line
             }
 
-        // Pad or trim to match input count
-        if lines.count >= segmentTexts.count {
-            return Array(lines.prefix(segmentTexts.count))
-        } else {
-            return lines + Array(repeating: "", count: segmentTexts.count - lines.count)
+        // Exact match: done.
+        if lines.count == segmentTexts.count {
+            return lines
         }
+        // Single segment: the model may have wrapped its answer over several lines.
+        if segmentTexts.count == 1 {
+            return [lines.joined(separator: " ")]
+        }
+        // Small/local models often merge or split lines, which misaligns every
+        // translation after that point (and leaves blanks). Fall back to
+        // translating each segment on its own so every line gets a correct result.
+        var results: [String] = []
+        var context = previousTranslations
+        for text in segmentTexts {
+            try Task.checkCancellation()
+            let one = try await translateSegmentsWithOpenAI(
+                segmentTexts: [text], targetLanguage: targetLanguage,
+                previousTranslations: context)
+            let t = one.first ?? ""
+            results.append(t)
+            context.append((original: text, translated: t))
+        }
+        return results
     }
 
     /// Send the request with up to 2 retries (3 attempts total) for transient failures

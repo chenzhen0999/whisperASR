@@ -8,8 +8,9 @@ struct RecordingView: View {
     @State private var shouldAutoScroll = true
     @State private var isAlwaysOnTop = false
     @State private var translationOnly = false
-    @AppStorage("transcriptFontSize") private var transcriptFontSizeRaw = TranscriptFontSize.normal.rawValue
-    private var fontSize: TranscriptFontSize { TranscriptFontSize(rawValue: transcriptFontSizeRaw) ?? .normal }
+    @AppStorage("liveTranscriptFontSize") private var transcriptFontSizeRaw = TranscriptFontSize.s28.rawValue
+    @AppStorage("recordingOverlayOpacity") private var recordingOverlayOpacity = 0.35
+    private var fontSize: TranscriptFontSize { TranscriptFontSize(rawValue: transcriptFontSizeRaw) ?? .s28 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,7 +29,10 @@ struct RecordingView: View {
             idealHeight: appState.enableLiveTranscription ? 300 : 44,
             maxHeight: appState.enableLiveTranscription ? .infinity : 44
         )
-        .background(WindowConfigurator())
+        .background(
+            Color(nsColor: .windowBackgroundColor).opacity(recordingOverlayOpacity)
+                .background(WindowConfigurator(overlayOpacity: recordingOverlayOpacity))
+        )
     }
 
     // MARK: - Recording
@@ -90,6 +94,24 @@ struct RecordingView: View {
                     .buttonStyle(.plain)
                     .help(translationOnly ? "Show original and translation" : "Show translation only")
                 }
+
+                Button {
+                    cycleFontSize()
+                } label: {
+                    Image(systemName: "textformat.size")
+                        .foregroundStyle(.blue)
+                }
+                .buttonStyle(.plain)
+                .help("Cycle transcript font size")
+
+                Button {
+                    cycleOverlayOpacity()
+                } label: {
+                    Image(systemName: recordingOverlayOpacity < 0.15 ? "rectangle.dashed" : "rectangle.fill")
+                        .foregroundStyle(recordingOverlayOpacity < 0.15 ? .blue : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Cycle background transparency")
 
                 Button {
                     isAlwaysOnTop.toggle()
@@ -242,6 +264,28 @@ struct RecordingView: View {
         }
     }
 
+    private func cycleFontSize() {
+        let order = TranscriptFontSize.allCases
+        let current = TranscriptFontSize(rawValue: transcriptFontSizeRaw) ?? .s28
+        let idx = order.firstIndex(of: current) ?? 0
+        transcriptFontSizeRaw = order[(idx + 1) % order.count].rawValue
+    }
+
+    private func cycleOverlayOpacity() {
+        // 0.35 → 0.15 → 0.0 (near clear) → 0.55 → back
+        let steps: [Double] = [0.35, 0.15, 0.0, 0.55]
+        let current = recordingOverlayOpacity
+        let idx = steps.enumerated().min(by: { abs($0.1 - current) < abs($1.1 - current) })?.offset ?? 0
+        recordingOverlayOpacity = steps[(idx + 1) % steps.count]
+        if let win = NSApp.windows.first(where: { $0.title == "Recording" }) {
+            let clear = recordingOverlayOpacity < 0.01
+            win.isOpaque = !clear
+            win.backgroundColor = clear
+                ? .clear
+                : NSColor.windowBackgroundColor.withAlphaComponent(recordingOverlayOpacity)
+        }
+    }
+
     private func setWindowAlwaysOnTop(_ alwaysOnTop: Bool) {
         NSApplication.shared.windows
             .first { $0.title == "Recording" }?
@@ -260,32 +304,58 @@ struct RecordingView: View {
 
 /// Extracted row view with Equatable conformance so SwiftUI can skip
 /// re-rendering rows whose segment + translation haven't changed.
+/// White fill + black outline, readable on busy livestream backgrounds.
+private struct OutlinedCaptionText: View {
+    let text: String
+    let font: Font
+    let fill: Color
+    var outlineWidth: CGFloat = 2.2
+
+    private static let offsets: [(CGFloat, CGFloat)] = [
+        (-1, 0), (1, 0), (0, -1), (0, 1),
+        (-1, -1), (-1, 1), (1, -1), (1, 1),
+        (-2, 0), (2, 0), (0, -2), (0, 2),
+    ]
+
+    var body: some View {
+        ZStack {
+            ForEach(Array(Self.offsets.enumerated()), id: \.offset) { _, o in
+                Text(text)
+                    .font(font)
+                    .foregroundStyle(.black)
+                    .offset(x: o.0 * outlineWidth / 2, y: o.1 * outlineWidth / 2)
+            }
+            Text(text)
+                .font(font)
+                .foregroundStyle(fill)
+        }
+        .shadow(color: .black.opacity(0.45), radius: 2, x: 0, y: 1)
+    }
+}
+
 private struct LiveSegmentRow: View, Equatable {
     let segment: TranscriptionSegment
     let translation: String
     let fontSize: TranscriptFontSize
     let translationOnly: Bool
 
-    private static let translationColor = Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
-        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? NSColor.systemTeal.withAlphaComponent(0.85)
-            : NSColor.systemBlue.withAlphaComponent(0.75)
-    }))
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             if !translationOnly {
-                Text(segment.text.trimmingCharacters(in: .whitespaces))
-                    .font(fontSize.bodyFont)
-                    .foregroundStyle(.primary.opacity(0.85))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                OutlinedCaptionText(
+                    text: segment.text.trimmingCharacters(in: .whitespaces),
+                    font: fontSize.bodyFont,
+                    fill: .white
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             if !translation.isEmpty {
-                Text(translation)
-                    .font(translationOnly ? fontSize.bodyFont : fontSize.translationFont)
-                    .foregroundStyle(Self.translationColor)
-                    .italic(translationOnly ? false : true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                OutlinedCaptionText(
+                    text: translation,
+                    font: translationOnly ? fontSize.bodyFont : fontSize.translationFont,
+                    fill: Color(red: 0.55, green: 0.90, blue: 1.0)
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -416,21 +486,40 @@ private struct ScrollPositionObserver: NSViewRepresentable {
 
 // MARK: - Window Configurator
 
-/// Hides traffic lights and enables drag-to-move on the Recording window.
+/// Hides traffic lights, enables drag-to-move, and applies a translucent chrome.
 private struct WindowConfigurator: NSViewRepresentable {
+    var overlayOpacity: Double = 0.35
+
     class ConfigView: NSView {
+        var overlayOpacity: Double = 0.35
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            apply()
+        }
+        func apply() {
             guard let window else { return }
             window.isMovableByWindowBackground = true
             window.standardWindowButton(.closeButton)?.isHidden = true
             window.standardWindowButton(.miniaturizeButton)?.isHidden = true
             window.standardWindowButton(.zoomButton)?.isHidden = true
+            let clear = overlayOpacity < 0.01
+            window.isOpaque = !clear
+            window.backgroundColor = clear
+                ? .clear
+                : NSColor.windowBackgroundColor.withAlphaComponent(overlayOpacity)
+            window.hasShadow = true
         }
     }
 
-    func makeNSView(context: Context) -> NSView { ConfigView() }
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func makeNSView(context: Context) -> ConfigView {
+        let v = ConfigView()
+        v.overlayOpacity = overlayOpacity
+        return v
+    }
+    func updateNSView(_ nsView: ConfigView, context: Context) {
+        nsView.overlayOpacity = overlayOpacity
+        nsView.apply()
+    }
 }
 
 // MARK: - Window Drag Overlay

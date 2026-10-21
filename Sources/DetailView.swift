@@ -7,6 +7,7 @@ struct DetailView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
     @State private var showTimestamps = true
+    @AppStorage("detailTranscriptFontSize") private var detailFontSizeRaw = TranscriptFontSize.s22.rawValue
     @State private var translationOnly = false
     @State private var showSearch = false
     @State private var minutesPromptStore = MinutesPromptStore.shared
@@ -145,6 +146,13 @@ struct DetailView: View {
                             .menuIndicator(.hidden)
                             .help("Generate meeting minutes with a prompt")
 
+                            Button {
+                                cycleDetailFontSize()
+                            } label: {
+                                Image(systemName: "textformat.size")
+                            }
+                            .help("Cycle transcript font size (18→22→28→34→40)")
+
                             Menu {
                                 Button("Copy Content") { copyContent(item) }
                                 if !item.translatedSegments.isEmpty {
@@ -225,6 +233,13 @@ struct DetailView: View {
     }
 
     // MARK: - Copy & Export
+
+    private func cycleDetailFontSize() {
+        let order = TranscriptFontSize.allCases
+        let current = TranscriptFontSize(rawValue: detailFontSizeRaw) ?? .s22
+        let idx = order.firstIndex(of: current) ?? 0
+        detailFontSizeRaw = order[(idx + 1) % order.count].rawValue
+    }
 
     private func copyContent(_ item: TranscriptionItem) {
         let text = plainTranscript(item)
@@ -474,14 +489,14 @@ struct TranscriptContentView: View {
             searchQuery: query,
             highlightedMatchIndices: activeIndices,
             showTimestamp: showTimestamps,
-            translationOnly: translationOnly
+            translationOnly: translationOnly,
+            onSeek: {
+                audioPlayer.load(url: item.fileURL)
+                audioPlayer.seek(to: segment.start)
+                audioPlayer.play()
+            }
         )
         .id(index)
-        .onTapGesture {
-            audioPlayer.load(url: item.fileURL)
-            audioPlayer.seek(to: segment.start)
-            audioPlayer.play()
-        }
     }
 
     private func activeMatchIndicesForSegment(_ segmentIndex: Int) -> Set<Int> {
@@ -578,9 +593,10 @@ struct SegmentRow: View {
     var highlightedMatchIndices: Set<Int> = []
     var showTimestamp: Bool = true
     var translationOnly: Bool = false
+    var onSeek: (() -> Void)? = nil
 
-    @AppStorage("transcriptFontSize") private var transcriptFontSizeRaw = TranscriptFontSize.normal.rawValue
-    private var fontSize: TranscriptFontSize { TranscriptFontSize(rawValue: transcriptFontSizeRaw) ?? .normal }
+    @AppStorage("detailTranscriptFontSize") private var transcriptFontSizeRaw = TranscriptFontSize.s22.rawValue
+    private var fontSize: TranscriptFontSize { TranscriptFontSize(rawValue: transcriptFontSizeRaw) ?? .s22 }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -590,6 +606,9 @@ struct SegmentRow: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 55, alignment: .trailing)
                     .padding(.top, 7)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onSeek?() }
+                    .help("Jump to this time")
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -610,6 +629,7 @@ struct SegmentRow: View {
                 if !translationOnly {
                     highlightedText(segment.text.trimmingCharacters(in: .whitespaces))
                         .font(fontSize.bodyFont)
+                        .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .opacity(isCurrent ? 1.0 : 0.85)
                 }
@@ -623,9 +643,11 @@ struct SegmentRow: View {
                                 : NSColor.systemBlue.withAlphaComponent(0.75)
                         })))
                         .italic(translationOnly ? false : true)
+                        .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            .textSelection(.enabled)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(
@@ -635,7 +657,6 @@ struct SegmentRow: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: 4))
         }
-        .contentShape(Rectangle())
     }
 
     private func highlightedText(_ text: String) -> Text {
