@@ -9,7 +9,10 @@ let package = Package(
         // the local OpenAI-compatible transcription API.
         .package(url: "https://github.com/swhitty/FlyingFox.git", from: "0.26.0"),
         // Core ML / ANE runtime for NVIDIA Nemotron streaming ASR models.
-        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.17.7", traits: []),
+        // Vendored FluidAudio 0.17.7 (commit 503b4bd1) with WhisperASR patches:
+        // dtype/stride-aware logits argmax (fixes vDSP_maxvi crash) + blank-rescue guard.
+        // See Vendor/FluidAudio/WHISPERASR_PATCHES.md.
+        .package(path: "Vendor/FluidAudio", traits: []),
         // Open-source Pyannote community-1 diarization from Argmax.
         .package(url: "https://github.com/argmaxinc/argmax-oss-swift.git", exact: "1.1.1"),
     ],

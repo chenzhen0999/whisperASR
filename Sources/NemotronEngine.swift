@@ -9,9 +9,26 @@ actor NemotronEngine {
     private var manager: StreamingNemotronMultilingualAsrManager?
     private var loadedDirectory: String?
 
+    // WhisperASR patch (fix/nemotron-logits): one operation at a time.
+    // Actors are re-entrant at every `await`, so without this gate a second
+    // request (API call, live-caption chunk, model unload) could reset/clean up
+    // the shared manager while another transcription is suspended inside
+    // `manager.process(...)` — corrupting its buffers mid-decode.
+    private var busy = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private func acquire() async {
+        if !busy { busy = true; return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+    private func release() {
+        if waiters.isEmpty { busy = false } else { waiters.removeFirst().resume() }
+    }
+
     func ensureLoaded(directory: URL) async throws {
+        await acquire()
+        defer { release() }
         if loadedDirectory == directory.path, manager != nil { return }
-        await unload()
+        await unloadLocked()
         let m = StreamingNemotronMultilingualAsrManager()
         try await m.loadModels(from: directory)
         manager = m
@@ -19,6 +36,12 @@ actor NemotronEngine {
     }
 
     func unload() async {
+        await acquire()
+        defer { release() }
+        await unloadLocked()
+    }
+
+    private func unloadLocked() async {
         if let manager { await manager.cleanup() }
         manager = nil
         loadedDirectory = nil
@@ -31,6 +54,8 @@ actor NemotronEngine {
     func transcribe(samples: [Float],
                     language: String?,
                     onProgress: (@Sendable (Double) -> Void)? = nil) async throws -> TranscriptionResult {
+        await acquire()
+        defer { release() }
         guard let manager else {
             throw TranscriptionError.processFailed("Nemotron model not loaded")
         }
@@ -69,6 +94,8 @@ actor NemotronEngine {
     /// Transcribe a short chunk (live transcription). Times are relative to the
     /// start of the chunk, matching the whisper transcribeChunk contract.
     func transcribeChunk(samples: [Float]) async throws -> TranscriptionResult {
+        await acquire()
+        defer { release() }
         guard let manager else {
             throw TranscriptionError.processFailed("Nemotron model not loaded")
         }
