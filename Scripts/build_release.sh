@@ -192,7 +192,14 @@ ENTPLIST
     codesign --verify --deep --strict "$APP_BUNDLE"
     spctl --assess --type execute "$APP_BUNDLE" && echo "    Gatekeeper: OK" || echo "    Gatekeeper: not yet notarized (run notarytool to fix)"
 else
-    echo "==> Skipping code signing (set CODESIGN_IDENTITY to sign)"
+    # No Developer ID: ad-hoc sign with the bundle id so the identity is stable and
+    # Info.plist is bound. Otherwise the linker-only signature uses the bare executable
+    # name, and macOS privacy settings (Screen Recording / Microphone) can't match the app.
+    echo "==> Ad-hoc signing app bundle as $BUNDLE_ID (set CODESIGN_IDENTITY for a real signature)..."
+    codesign --deep --force --sign - --identifier "$BUNDLE_ID" "$APP_BUNDLE"
+    codesign --verify --deep --strict "$APP_BUNDLE"
+    echo "    Note: after replacing an older build, re-grant Screen Recording / Microphone"
+    echo "    (tccutil reset ScreenCapture $BUNDLE_ID; tccutil reset Microphone $BUNDLE_ID)."
 fi
 
 echo "==> Done! App bundle created at:"
